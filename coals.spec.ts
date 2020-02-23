@@ -1,4 +1,4 @@
-import { interval, Observable, Subject, timeout } from "./coals";
+import { Coal, coals, combine, interval, Observable, Subject, timeout } from "./coals";
 
 describe("Coals", () => {
     describe("Observable", () => {
@@ -199,6 +199,60 @@ describe("Coals", () => {
             jest.advanceTimersByTime(N * N);
 
             expect(obs.completed).toBe(true);
+        });
+    });
+});
+
+describe("AtomCoals", () => {
+    it("should have a value", () => {
+        const c = coals(123);
+
+        expect(c()).toBe(123);
+    });
+
+    it("should fire new values on change", () => {
+        return new Promise(done => {
+            const c = coals(123);
+
+            c.subscribe(newValue => {
+                expect(newValue).toBe(321);
+                done();
+            });
+
+            c(321);
+        });
+    });
+
+    it("should be instance of Coal", () => {
+        const c = coals(123);
+
+        // eslint-disable-next-line no-undef
+        expect(c instanceof Coal).toBe(true);
+    });
+
+    describe("operators", () => {
+        describe("combine", () => {
+            it("should combine", () => {
+                const a = coals(1);
+                const b = coals(2);
+
+                const c = combine([a, b], (va, vb) => va + vb);
+
+                expect(c()).toBe(3);
+            });
+
+            it("combine should handle changes of combined stream", () => {
+                const a = coals(1);
+                const b = coals(2);
+
+                const c = combine([a, b], (va, vb) => va + vb);
+
+                expect(c()).toBe(3);
+
+                a(8);
+
+                expect(c()).toBe(10);
+            });
         });
     });
 });
