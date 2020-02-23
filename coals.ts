@@ -1,20 +1,49 @@
-type NextSubscriber<T> = (nextValue: T) => void;
+type StreamType<T> = T | undefined;
+
+type NextSubscriber<T> = (nextValue: StreamType<T>) => void;
 type CompleteSubscribe = () => void;
 type ErrorSubscribe = <T extends Error>(err: T) => void;
 
+class Subscription {
+    public subscribed = true;
+
+    public constructor(private onUnsubscribe: TeardownCallback | void) {}
+
+    public unsubscribe(): void {
+        if (!this.subscribed) {
+            return;
+        }
+
+        this.subscribed = false;
+
+        if (this.onUnsubscribe) {
+            this.onUnsubscribe();
+        }
+    }
+}
+
+// TODO: extends interface with Subscription class ???
 class Subscriber<T> {
-    public subscribed: boolean;
+    public subscription?: Subscription;
 
     public constructor(
         private readonly nextSubscriber?: NextSubscriber<T>,
         private readonly completeSubscriber?: CompleteSubscribe,
         private readonly errorSubscriber?: ErrorSubscribe
-    ) {
-        this.subscribed = true;
+    ) {}
+
+    public subscribe(onUnsubscribe: TeardownCallback | void): Subscription {
+        this.subscription = new Subscription(onUnsubscribe);
+
+        return this.subscription;
     }
 
     public unsubscribe(): void {
-        this.subscribed = false;
+        if (!this.subscription || !this.subscription.subscribed) {
+            throw new Error("Subscriber not subscribed yet");
+        }
+
+        this.subscription.unsubscribe();
     }
 
     public complete(): void {
@@ -25,8 +54,8 @@ class Subscriber<T> {
         }
     }
 
-    public next(value: T): void {
-        if (this.subscribed && this.nextSubscriber) {
+    public next(value: StreamType<T>): void {
+        if (this.subscription && this.subscription.subscribed && this.nextSubscriber) {
             try {
                 this.nextSubscriber(value);
             } catch (e) {
@@ -38,46 +67,69 @@ class Subscriber<T> {
     }
 }
 
-class Stream<T> {
-    public constructor(
-        public value: T,
-        public completed: boolean,
-        public subscribers: readonly Subscriber<T>[]
-    ) {}
+type TeardownCallback = () => void;
+export type ObserverSubscription<T> = (observer: Subscriber<T>) => TeardownCallback | void;
 
-    public next(nextValue: T): void {
-        if (this.completed) {
-            throw new Error();
-        }
+export class Observable<T> {
+    public completed: boolean;
 
-        this.value = nextValue;
+    public observers: readonly Subscriber<T>[];
 
-        this.subscribers.forEach(s => s.next(this.value));
+    public constructor(private observerSubscription: ObserverSubscription<T>) {
+        this.completed = false;
+        this.observers = [];
     }
 
     public subscribe(
         nextCallback?: NextSubscriber<T>,
         completeCallback?: CompleteSubscribe,
         errorCallback?: ErrorSubscribe
-    ): void {
-        this.subscribers = [
-            ...this.subscribers,
-            new Subscriber<T>(nextCallback, completeCallback, errorCallback)
-        ];
+    ): Subscription {
+        let teardown: TeardownCallback | void;
+
+        const subscriber = new Subscriber<T>(nextCallback, completeCallback, errorCallback);
+        const subscription = subscriber.subscribe(() => {
+            this.onUnsubscribe(subscriber);
+            if (teardown) {
+                teardown();
+            }
+        });
+
+        teardown = this.observerSubscription(subscriber);
+        this.observers = [...this.observers, subscriber];
+
+        return subscription;
+    }
+
+    public onUnsubscribe(subscriber: Subscriber<T>): void {
+        this.observers = this.observers.filter(o => o !== subscriber);
     }
 
     public complete(): void {
         this.completed = true;
 
-        this.subscribers.forEach(subscriber => {
+        this.observers.forEach(subscriber => {
             subscriber.complete();
             subscriber.unsubscribe();
         });
     }
 }
 
-const coals = <T>(initialValue: T): Stream<T> => {
-    return new Stream(initialValue, false, []);
-};
+export class Subject<T> extends Observable<T> {
+    public value: StreamType<T>;
 
-export default coals;
+    public constructor() {
+        // eslint-disable-next-line constructor-super
+        super(() => undefined);
+    }
+
+    public next(nextValue: StreamType<T>): void {
+        if (this.completed) {
+            throw new Error("Observable already completed");
+        }
+
+        this.value = nextValue;
+
+        this.observers.forEach(o => o.next(nextValue));
+    }
+}
