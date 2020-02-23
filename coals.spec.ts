@@ -1,4 +1,4 @@
-import { Observable, Subject } from "./coals";
+import { interval, Observable, Subject, timeout } from "./coals";
 
 describe("Coals", () => {
     describe("Observable", () => {
@@ -127,14 +127,6 @@ describe("Coals", () => {
             });
         });
 
-        it("should set value to stream", () => {
-            const s = new Subject();
-            const newValue = 321;
-
-            s.next(newValue);
-            expect(s.value).toBe(newValue);
-        });
-
         it("should notify subscribers of changes", () => {
             return new Promise(resolve => {
                 const s = new Subject();
@@ -152,6 +144,61 @@ describe("Coals", () => {
                 s.next(newValue);
                 s.complete();
             });
+        });
+    });
+
+    describe("interval", () => {
+        jest.useFakeTimers();
+
+        it("should fire N times", () => {
+            const N = 10;
+            const mock = jest.fn();
+
+            interval(N).subscribe(mock);
+
+            jest.advanceTimersByTime(N * N);
+
+            expect(mock).toBeCalledTimes(N);
+        });
+
+        it("shouldn't complete", () => {
+            const N = 10;
+            const mock = jest.fn();
+            const obs = interval(N);
+
+            obs.subscribe(mock);
+
+            jest.advanceTimersByTime(N * N);
+
+            expect(obs.completed).toBe(false);
+        });
+    });
+
+    describe("timeout", () => {
+        jest.useFakeTimers();
+
+        it("should fire N times", () => {
+            const N = 10;
+            const mock = jest.fn();
+
+            timeout(N).subscribe(mock);
+
+            jest.advanceTimersByTime(N * N);
+
+            expect(mock).toBeCalledTimes(1);
+        });
+
+        it("should complete after timeout", () => {
+            const N = 10;
+            const mock = jest.fn();
+
+            const obs = timeout(N);
+
+            obs.subscribe(mock);
+
+            jest.advanceTimersByTime(N * N);
+
+            expect(obs.completed).toBe(true);
         });
     });
 });

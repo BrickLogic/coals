@@ -87,7 +87,14 @@ export class Observable<T> {
     ): Subscription {
         let teardown: TeardownCallback | void;
 
-        const subscriber = new Subscriber<T>(nextCallback, completeCallback, errorCallback);
+        const innerCompleteCallback = (): void => {
+            this.onComplete();
+            if (completeCallback) {
+                completeCallback();
+            }
+        };
+
+        const subscriber = new Subscriber<T>(nextCallback, innerCompleteCallback, errorCallback);
         const subscription = subscriber.subscribe(() => {
             this.onUnsubscribe(subscriber);
             if (teardown) {
@@ -105,6 +112,10 @@ export class Observable<T> {
         this.observers = this.observers.filter(o => o !== subscriber);
     }
 
+    private onComplete(): void {
+        this.completed = true;
+    }
+
     public complete(): void {
         this.completed = true;
 
@@ -116,8 +127,6 @@ export class Observable<T> {
 }
 
 export class Subject<T> extends Observable<T> {
-    public value: StreamType<T>;
-
     public constructor() {
         // eslint-disable-next-line constructor-super
         super(() => undefined);
@@ -128,8 +137,33 @@ export class Subject<T> extends Observable<T> {
             throw new Error("Observable already completed");
         }
 
-        this.value = nextValue;
-
         this.observers.forEach(o => o.next(nextValue));
     }
 }
+
+export const interval = (intervalTime: number): Observable<number> => {
+    return new Observable(s => {
+        let counter = 0;
+        const i = setInterval(() => {
+            counter += 1;
+            s.next(counter * intervalTime);
+        }, intervalTime);
+
+        return () => {
+            clearInterval(i);
+        };
+    });
+};
+
+export const timeout = (timeoutTime: number): Observable<void> => {
+    return new Observable(s => {
+        const t = setTimeout(() => {
+            s.next();
+            s.complete();
+        }, timeoutTime);
+
+        return () => {
+            clearTimeout(t);
+        };
+    });
+};
