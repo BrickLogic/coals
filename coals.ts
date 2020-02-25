@@ -1,52 +1,3 @@
-
-/*
- * const v = coals(1);
- * const z = coals(2);
- *
- *
- * const x = combine([v, z], (v, z) => {
- *   return v + z;
- * });
- *
- * console.log(x) // 3
- *
- *
- * const y = merge(
- *   v,
- *   z
- * );
- *
- * console.log(y); // 2
- * v(8);
- *
- * console.log(y()); // 8
- *
- * const iv = interval();
- *
- * const i = interval(10);
- *
- * const unsubscribe = i.subscrine(() => {
- *   console.log('count each 10 ms')
- * });
- *
- * const unsub = on([v, z], (vv, vz) => {
- *  console.log(vv + vz);
- * })
- *
- * // will log 10
- *
- * v(20);
- *
- * // will log 22
- *
- * unsub();
- *
- * v(30);
- *
- * // will log nothing
- *
- * */
-
 type AtomResetCallback = () => void;
 type AtomChangeCallback<T> = (newState: T) => void;
 type AddWatch<T> = (watcher: AtomChangeCallback<T>, resetWatcher?: AtomResetCallback) => () => void;
@@ -104,7 +55,7 @@ function atom<T>(value: T): Atom<T> {
         watchers = [];
     };
 
-    const state: Atom<T> = {
+    return {
         isAtom: IsAtom.TRUE,
         value: () => v,
         valueOf: () => v,
@@ -115,86 +66,130 @@ function atom<T>(value: T): Atom<T> {
         update,
         reset
     };
-
-    return state;
 }
 
-export class Coal<T> {
-    private atom: Atom<T>;
+type SubscriptionCallback<T> = (nextValue?: T) => void;
+type NextCallback<T> = (nextValue?: T) => T;
+type ValueGetter<T> = () => T;
+type Subscribe<T> = (
+    callback: SubscriptionCallback<Optional<T>> | Coal<Optional<T>>,
+    complete?: AtomResetCallback
+) => () => void;
 
-    private isActive: boolean;
+type Optional<T> = T | undefined;
 
-    public constructor(initValue: T) {
-        // super();
-        this.isActive = true;
-        this.atom = atom(initValue);
-    }
+interface Coal<T> {
+    isCoal: true;
+    value: ValueGetter<Optional<T>>;
+    next: NextCallback<Optional<T>>;
+    subscribe: Subscribe<T>;
+    complete: () => void;
+}
 
-    public valueOf(): T {
-        return get(this.atom);
-    }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const coalProducer = <T = undefined>(initValue?: Optional<T>): Coal<T> => {
+    const a = atom(initValue);
+    const isActive = atom(true);
 
-    public next(nextValue: T): T {
-        if (!this.isActive) {
+    const value: ValueGetter<Optional<T>> = () => a.valueOf();
+    const next: NextCallback<Optional<T>> = nextValue => {
+        if (!get(isActive)) {
             return nextValue;
         }
 
-        this.atom.update(nextValue);
+        a.update(nextValue);
 
         return nextValue;
-    }
+    };
 
-    public subscribe(callback: AtomChangeCallback<T>, complete?: AtomResetCallback): () => void {
-        return this.atom.addWatch(callback, complete);
-    }
-
-    public complete(): void {
-        this.isActive = false;
-
-        this.atom.reset();
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public call(nextValue?: T): T {
-        if (typeof nextValue === "undefined") {
-            return get(this.atom);
+    const subscribe: Subscribe<T> = (callbackOrCoal, complete) => {
+        if (typeof callbackOrCoal === "object") {
+            return callbackOrCoal.subscribe(next);
         }
 
-        this.next(nextValue);
-
-        return nextValue;
-    }
-}
-
-interface CoalFn<T> extends Coal<T> {
-    (): T;
-    (n: T): T;
-}
-
-export function coals<T>(initValue: T): CoalFn<T> {
-    const c = new Coal(initValue);
-
-    function coalHandler(nextValue?: T): T {
-        return c.call(nextValue);
-    }
-
-    // eslint-disable-next-line no-proto
-    coalHandler.__proto__ = c;
-
-    // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
-    // @ts-ignore
-    return coalHandler;
-}
-
-export function combine<T, K>(
-    coalsList: readonly CoalFn<T>[],
-    producer: (...args: readonly T[]) => K
-) {
-    return () => {
-        const args = coalsList.reduce((acc, coal) => {
-            return [...acc, coal()];
-        }, [] as readonly T[]);
-
-        return producer(...args);
+        return a.addWatch(callbackOrCoal, complete);
     };
-}
+
+    const complete = (): void => {
+        isActive.update(false);
+        a.reset();
+    };
+
+    return {
+        isCoal: true,
+        value,
+        next,
+        subscribe,
+        complete
+    };
+};
+
+export const coals = coalProducer;
+
+// export function on<T, K>(
+//     coalsList: readonly Coal<T>[],
+//     cb: (...args: readonly T[]) => K
+// ): () => void {
+//     const callOnChange = (): K => cb(...combine(coalsList, (...c) => c)());
+//
+//     const subs = coalsList.map((c): (() => void) => {
+//         return c.subscribe(callOnChange);
+//     });
+//
+//     return () => subs.forEach(unsubscribe => unsubscribe());
+// }
+
+// export function combine<T, K>(
+//     coalsList: readonly Coal<T>[],
+//     producer: (...args: readonly T[]) => K
+// ) {
+//     return () => {
+//         const args = coalsList.reduce((acc, coal) => {
+//             return [...acc, coal.value()];
+//         }, [] as readonly T[]);
+//
+//         return producer(...args);
+//     };
+// }
+
+//
+// export function interval(intervalTime: number): Coal<undefined> {
+//     const c = coals(undefined);
+//
+//     const i = setInterval(() => c.next(undefined), intervalTime);
+//
+//     c.subscribe(
+//         () => undefined,
+//         () => clearInterval(i)
+//     );
+//
+//     return c;
+// }
+//
+// export function timeout(intervalTime: number): Coal<undefined> {
+//     const c = coals(undefined);
+//
+//     const i = setTimeout(() => c.next(undefined), intervalTime);
+//
+//     c.subscribe(
+//         () => undefined,
+//         () => clearTimeout(i)
+//     );
+//
+//     return c;
+// }
+//
+// export function merge<T>(...streams: Coal<T>[]): Coal<T | undefined> {
+//     const returnedStream = coals<T | undefined>(undefined);
+//
+//     const subs = streams.map(c => {
+//         return c.subscribe(v => returnedStream.next(v));
+//     });
+//
+//     returnedStream.subscribe(
+//         () => undefined,
+//         () => subs.forEach(unsubscribe => unsubscribe())
+//     );
+//
+//     return returnedStream;
+// }
