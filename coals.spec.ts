@@ -1,4 +1,4 @@
-import { of } from "./coals";
+import { from, of } from "./coals";
 
 describe("Subject", () => {
     it("should have a value", () => {
@@ -65,48 +65,48 @@ describe("Subject", () => {
         });
     });
 
-    // describe("Observable", () => {
-    //     it("should fire event from observable", () => {
-    //         return new Promise(done => {
-    //             const d = Date.now();
-    //             const c = coals(o => o.next(d));
-    //
-    //             c.subscribe(newValue => {
-    //                 expect(newValue).toBe(d);
-    //                 done();
-    //             });
-    //         });
-    //     });
-    //
-    //     it("should fire complete when observable complete subscription", () => {
-    //         return new Promise(done => {
-    //             const c = coals(o => o.complete());
-    //
-    //             c.subscribe(() => undefined, done);
-    //         });
-    //     });
-    //
-    //     it("should fire complete when coals complete", () => {
-    //         return new Promise(done => {
-    //             const c = coals(() => undefined);
-    //
-    //             c.subscribe(() => undefined, done);
-    //
-    //             c.complete();
-    //         });
-    //     });
-    //
-    //     it("should forward events to subscribed coals", () => {
-    //         const c = coals<number>(o => {
-    //             o.next(22);
-    //         });
-    //         const nc = coals<number | undefined>();
-    //
-    //         c.subscribe(nc);
-    //
-    //         expect(nc.value()).toBe(22);
-    //     });
-    // });
+    describe("Observable", () => {
+        it("should fire event from observable", () => {
+            return new Promise(done => {
+                const d = Date.now();
+                const c = from(o => o.next(d));
+
+                c.subscribe(newValue => {
+                    expect(newValue).toBe(d);
+                    done();
+                });
+            });
+        });
+
+        it("should fire complete when observable complete subscription", () => {
+            return new Promise(done => {
+                const c = from(o => o.complete());
+
+                c.subscribe(() => undefined, done);
+            });
+        });
+
+        it("should fire complete when coals complete", () => {
+            return new Promise(done => {
+                const c = from(() => undefined);
+
+                c.subscribe(() => undefined, done);
+
+                c.complete();
+            });
+        });
+
+        it("should forward events to subscribed coals", () => {
+            const c = from<number>(o => {
+                o.next(22);
+            });
+            const nc = of<number | undefined>();
+
+            c.subscribe(nc);
+
+            expect(nc.value()).toBe(22);
+        });
+    });
 
     // describe("operators", () => {
     //     describe("combine", () => {
