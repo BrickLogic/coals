@@ -20,6 +20,17 @@ describe("Subject", () => {
         });
     });
 
+    it("should not reset value after complete", () => {
+        const c = of(123);
+        c.next(321);
+
+        c.complete();
+
+        c.next(333);
+
+        expect(c.value()).toBe(321);
+    });
+
     describe("Optional", () => {
         it("should have optional value", () => {
             const c = of();
