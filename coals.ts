@@ -203,12 +203,10 @@ export const from: From = <T>(eventProducer: CoalProducerObservable<T>): CoalObs
     };
 };
 
-interface Subject<T> {
+interface Subject<T> extends CoalObservable<T> {
     readonly isSubject: true;
     readonly value: ValueGetter<Optional<T>>;
     readonly next: NextCallback<Optional<T>>;
-    readonly subscribe: Subscribe<T>;
-    readonly complete: () => void;
 }
 
 type Of = <T>(initValue?: Optional<T>) => Subject<Optional<T>>;
@@ -249,10 +247,46 @@ export const of: Of = <T>(initValue: Optional<T>): Subject<Optional<T>> => {
     };
 
     return {
+        isCoal: true,
+        isObservable: true,
         isSubject: true,
         value,
         next,
         subscribe,
         complete
     };
+};
+
+const NONE_VALUE = {
+    none: true
+};
+
+type None = typeof NONE_VALUE;
+
+const isCombined = <T>(values: readonly (Optional<T> | None)[]): boolean => {
+    return values.every(v => v !== NONE_VALUE);
+};
+
+export const combine = <T>(
+    ...observables: readonly CoalObservable<T>[]
+): CoalObservable<readonly Optional<T>[]> => {
+    const combineObservables = (innerObs: Observer<readonly Optional<T>[]>): void => {
+        const values = atom<readonly (None | Optional<T>)[]>(observables.map(() => NONE_VALUE));
+
+        observables.forEach((obs, i) => {
+            obs.subscribe(nextV => {
+                const valuesCopy = [...values.value()];
+
+                valuesCopy[i] = nextV;
+
+                values.update(valuesCopy);
+
+                if (isCombined(valuesCopy)) {
+                    innerObs.next(valuesCopy as readonly Optional<T>[]);
+                }
+            });
+        });
+    };
+
+    return from(combineObservables);
 };

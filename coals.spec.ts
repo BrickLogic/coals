@@ -1,4 +1,4 @@
-import { from, of } from "./coals";
+import { combine, from, of} from "./coals";
 
 describe("Subject", () => {
     it("should have a value", () => {
@@ -108,29 +108,37 @@ describe("Subject", () => {
         });
     });
 
-    // describe("operators", () => {
-    //     describe("combine", () => {
-    //         it("should combine", () => {
-    //             const a = coals(1);
-    //             const b = coals(2);
-    //
-    //             const c = combine([a, b], (va, vb) => va + vb);
-    //
-    //             expect(c()).toBe(3);
-    //         });
-    //
-    //         it("combine should handle changes of combined stream", () => {
-    //             const a = coals(1);
-    //             const b = coals(2);
-    //
-    //             const c = combine([a, b], (va, vb) => va + vb);
-    //
-    //             expect(c()).toBe(3);
-    //
-    //             a.next(8);
-    //
-    //             expect(c()).toBe(10);
-    //         });
-    //     });
-    // });
+    describe("operators", () => {
+        describe("combine", () => {
+            it("should combine", () => {
+                const a = of();
+                const b = of();
+
+                const c = combine(a, b);
+
+                const subscribeMock = jest.fn();
+
+                c.subscribe(subscribeMock);
+
+                a.next(8);
+                b.next(99);
+
+                expect(subscribeMock).toBeCalledTimes(1);
+                expect(subscribeMock).toBeCalledWith([8, 99]);
+            });
+
+            // it("combine should handle changes of combined stream", () => {
+            //     const a = coals(1);
+            //     const b = coals(2);
+            //
+            //     const c = combine([a, b], (va, vb) => va + vb);
+            //
+            //     expect(c()).toBe(3);
+            //
+            //     a.next(8);
+            //
+            //     expect(c()).toBe(10);
+            // });
+        });
+    });
 });
