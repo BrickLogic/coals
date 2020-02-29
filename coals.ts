@@ -269,10 +269,19 @@ function isCombined<T>(values: readonly (T | None)[]): values is readonly T[] {
 
 export function combine<T1, R>(sources: [Observable<T1>]): Observable<[T1]>;
 export function combine<T1, T2, R>(sources: [Observable<T1>, Observable<T2>]): Observable<[T1, T2]>;
-// eslint-disable-next-line import/export
 export function combine<T1, T2, T3, R>(
     sources: [Observable<T1>, Observable<T2>, Observable<T3>]
 ): Observable<[T1, T2, T3]>;
+export function combine<T1, R>(sources: [Observable<T1>]): Observable<[T1]>;
+export function combine<T1, T2, T3, R>(
+    sources: [Observable<T1>, Observable<T2>, Observable<T3>]
+): Observable<[T1, T2, T3]>;
+export function combine<T1, T2, T3, T4, R>(
+    sources: [Observable<T1>, Observable<T2>, Observable<T3>, Observable<T4>]
+): Observable<[T1, T2, T3, T4]>;
+export function combine<T1, T2, T3, T4, T5, R>(
+    sources: [Observable<T1>, Observable<T2>, Observable<T3>, Observable<T4>, Observable<T5>]
+): Observable<[T1, T2, T3, T4, T5]>;
 
 export function combine<T>(observables: readonly Observable<T>[]): Observable<T> {
     return from((innerObs: Observer<T>): void => {
@@ -316,5 +325,37 @@ export function interval(intervalValue: number): Observable<number> {
         }, intervalValue);
 
         return () => clearInterval(timer);
+    });
+}
+
+export function merge<T1, R>(o1: Observable<T1>): Observable<[T1]>;
+export function merge<T1, T2, R>(o1: Observable<T1>, o2: Observable<T2>): Observable<T1 | T2>;
+export function merge<T1, T2, T3, R>(
+    o1: Observable<T1>,
+    o2: Observable<T2>,
+    o3: Observable<T3>
+): Observable<T1 | T2 | T3>;
+export function merge<T1, T2, T3, T4, R>(
+    o1: Observable<T1>,
+    o2: Observable<T2>,
+    o3: Observable<T3>,
+    o4: Observable<T4>,
+): Observable<T1 | T2 | T3 | T4>;
+export function merge<T1, T2, T3, T4, T5, R>(
+    o1: Observable<T1>,
+    o2: Observable<T2>,
+    o3: Observable<T3>,
+    o4: Observable<T4>,
+    o5: Observable<T5>,
+): Observable<T1 | T2 | T3 | T4 | T5>;
+
+
+export function merge<T>(...observables: readonly Observable<T>[]): Observable<T> {
+    return from((innerObs: Observer<T>): void => {
+        observables.forEach(obs => {
+            obs.subscribe((nextEv: T) => {
+                innerObs.next(nextEv);
+            });
+        });
     });
 }
