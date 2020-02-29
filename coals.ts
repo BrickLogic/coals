@@ -72,9 +72,10 @@ function atom<T>(value: T): Atom<T> {
 type Noop = () => void;
 
 type Teardown = undefined | void | Noop;
+type NextCallback<T> = (nextValue: T) => void;
 
 interface Observer<T> {
-    readonly next: NextCallback<Optional<T>>;
+    readonly next: NextCallback<T>;
     readonly complete: Noop;
 }
 
@@ -84,8 +85,8 @@ interface Subscription<T> {
     readonly unsubscribe: Noop;
 }
 
-const createObserver = <T>(onNext: NextCallback<Optional<T>>, onComplete: Noop): Observer<T> => {
-    const next: NextCallback<Optional<T>> = ev => onNext(ev);
+const createObserver = <T>(onNext: NextCallback<T>, onComplete: Noop): Observer<T> => {
+    const next: NextCallback<T> = ev => onNext(ev);
     const complete: Noop = () => onComplete();
 
     return {
@@ -94,14 +95,11 @@ const createObserver = <T>(onNext: NextCallback<Optional<T>>, onComplete: Noop):
     };
 };
 
-const createSubscription = <T>(
-    onNext: NextCallback<Optional<T>>,
-    onComplete: Noop
-): Subscription<T> => {
+const createSubscription = <T>(onNext: NextCallback<T>, onComplete: Noop): Subscription<T> => {
     let teardown: Teardown;
     const isSubscribed = atom(true);
 
-    const internalOnNext: NextCallback<Optional<T>> = ev => {
+    const internalOnNext: NextCallback<T> = ev => {
         if (isSubscribed.value()) {
             onNext(ev);
         }
@@ -127,33 +125,29 @@ const createSubscription = <T>(
     };
 };
 
-type Optional<T> = T | undefined;
-
 type CoalProducerObservable<T> = (o: Observer<T>) => Teardown;
 
-type SubscriptionCallback<T> = (nextValue?: T) => void;
-type NextCallback<T> = (nextValue?: T) => void;
-type ValueGetter<T> = () => T;
+type SubscriptionCallback<T> = (nextValue: T) => void;
 type Subscribe<T> = (
-    callback: SubscriptionCallback<Optional<T>> | Subject<Optional<T>>,
+    callback: SubscriptionCallback<T> | Subject<T>,
     complete?: AtomResetCallback
 ) => () => void;
 
-interface CoalObservable<T> {
+interface Observable<T> {
     readonly isCoal: true;
     readonly isObservable: true;
-    readonly subscribe: Subscribe<Optional<T>>;
+    readonly subscribe: Subscribe<T>;
     readonly complete: () => void;
 }
 
-export type From = <T>(eventProducer: CoalProducerObservable<T>) => CoalObservable<T>;
+export type From = <T>(eventProducer: CoalProducerObservable<T>) => Observable<T>;
 
-export const from: From = <T>(eventProducer: CoalProducerObservable<T>): CoalObservable<T> => {
+export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observable<T> => {
     const isCompleted = atom(false);
     const subscriptions = atom<readonly Noop[]>([]);
 
-    const subscribe: Subscribe<Optional<T>> = (callbackOrCoal, complete) => {
-        const onNext: NextCallback<Optional<T>> = ev => {
+    const subscribe: Subscribe<T> = (callbackOrCoal, complete) => {
+        const onNext = (ev: T): void => {
             if (isCompleted.value()) {
                 return;
             }
@@ -203,25 +197,31 @@ export const from: From = <T>(eventProducer: CoalProducerObservable<T>): CoalObs
     };
 };
 
-interface Subject<T> extends CoalObservable<T> {
+type ValueGetter<T> = () => T;
+type SubjectNextCallback<T> = (nextValue?: T) => void;
+
+interface Subject<T> extends Observable<T | undefined> {
     readonly isSubject: true;
-    readonly value: ValueGetter<Optional<T>>;
-    readonly next: NextCallback<Optional<T>>;
+    readonly value: ValueGetter<T | undefined>;
+    readonly next: SubjectNextCallback<T>;
 }
 
-type Of = <T>(initValue?: Optional<T>) => Subject<Optional<T>>;
+type Of = <T>(initValue?: T) => Subject<T>;
 
 interface Observer<T> {
-    readonly next: NextCallback<Optional<T>>;
+    readonly next: NextCallback<T>;
     readonly complete: () => void;
 }
 
-export const of: Of = <T>(initValue: Optional<T>): Subject<Optional<T>> => {
+export const of: Of = <T>(initValue?: T): Subject<T> => {
     const a = atom(initValue);
     const isCompleted = atom(false);
 
-    const value: ValueGetter<Optional<T>> = () => a.valueOf();
-    const next: NextCallback<Optional<T>> = nextValue => {
+    const value: ValueGetter<T | undefined> = () => {
+        return a.valueOf();
+    };
+
+    const next: NextCallback<T | undefined> = nextValue => {
         if (get(isCompleted)) {
             return;
         }
@@ -229,7 +229,7 @@ export const of: Of = <T>(initValue: Optional<T>): Subject<Optional<T>> => {
         a.update(nextValue);
     };
 
-    const subscribe: Subscribe<Optional<T>> = (callbackOrCoal, complete) => {
+    const subscribe: Subscribe<T | undefined> = (callbackOrCoal, complete) => {
         if (typeof callbackOrCoal === "object") {
             const subscription = a.addWatch(callbackOrCoal.next, complete);
 
@@ -263,15 +263,20 @@ const NONE_VALUE = {
 
 type None = typeof NONE_VALUE;
 
-const isCombined = <T>(values: readonly (Optional<T> | None)[]): boolean => {
+function isCombined<T>(values: readonly (T | None)[]): values is readonly T[] {
     return values.every(v => v !== NONE_VALUE);
-};
+}
 
-export const combine = <T>(
-    ...observables: readonly CoalObservable<T>[]
-): CoalObservable<readonly Optional<T>[]> => {
-    const combineObservables = (innerObs: Observer<readonly Optional<T>[]>): void => {
-        const values = atom<readonly (None | Optional<T>)[]>(observables.map(() => NONE_VALUE));
+export function combine<T1, R>(sources: [Observable<T1>]): Observable<[T1]>;
+export function combine<T1, T2, R>(sources: [Observable<T1>, Observable<T2>]): Observable<[T1, T2]>;
+// eslint-disable-next-line import/export
+export function combine<T1, T2, T3, R>(
+    sources: [Observable<T1>, Observable<T2>, Observable<T3>]
+): Observable<[T1, T2, T3]>;
+
+export function combine<T>(observables: readonly Observable<T>[]): Observable<T> {
+    return from((innerObs: Observer<T>): void => {
+        const values = atom<readonly (T | None)[]>(observables.map(() => NONE_VALUE));
 
         observables.forEach((obs, i) => {
             obs.subscribe(nextV => {
@@ -282,11 +287,11 @@ export const combine = <T>(
                 values.update(valuesCopy);
 
                 if (isCombined(valuesCopy)) {
-                    innerObs.next(valuesCopy as readonly Optional<T>[]);
+                    // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+                    // @ts-ignore
+                    innerObs.next(valuesCopy);
                 }
             });
         });
-    };
-
-    return from(combineObservables);
-};
+    });
+}

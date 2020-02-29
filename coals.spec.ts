@@ -100,7 +100,7 @@ describe("Subject", () => {
             const c = from<number>(o => {
                 o.next(22);
             });
-            const nc = of<number | undefined>();
+            const nc = of<number>();
 
             c.subscribe(nc);
 
@@ -114,7 +114,7 @@ describe("Subject", () => {
                 const a = of();
                 const b = of();
 
-                const c = combine(a, b);
+                const c = combine([a, b]);
 
                 const subscribeMock = jest.fn();
 
