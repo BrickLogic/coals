@@ -1,4 +1,4 @@
-import { combine, from, of} from "./coals";
+import {combine, from, of, timeout} from "./coals";
 
 describe("Subject", () => {
     it("should have a value", () => {
@@ -126,19 +126,53 @@ describe("Subject", () => {
                 expect(subscribeMock).toBeCalledTimes(1);
                 expect(subscribeMock).toBeCalledWith([8, 99]);
             });
-
-            // it("combine should handle changes of combined stream", () => {
-            //     const a = coals(1);
-            //     const b = coals(2);
-            //
-            //     const c = combine([a, b], (va, vb) => va + vb);
-            //
-            //     expect(c()).toBe(3);
-            //
-            //     a.next(8);
-            //
-            //     expect(c()).toBe(10);
-            // });
         });
+
+        describe("timeout", () => {
+            beforeEach(() => {
+                jest.useFakeTimers();
+            });
+
+            it("should fire event by timeout", () => {
+                const t = timeout(100);
+
+                const mock = jest.fn();
+
+                t.subscribe(mock);
+
+                jest.advanceTimersByTime(100);
+
+                expect(mock).toBeCalledTimes(1);
+                expect(mock).toBeCalledWith(100);
+            });
+
+            it("shouldn't fire event by timeout if unsubscribed", () => {
+                const t = timeout(100);
+
+                const mock = jest.fn();
+
+                const unsub = t.subscribe(mock);
+
+                unsub();
+
+                jest.advanceTimersByTime(100);
+
+                expect(mock).toBeCalledTimes(0);
+            });
+
+            it("shouldn't fire event by timeout if completed", () => {
+                const t = timeout(100);
+
+                const mock = jest.fn();
+
+                t.subscribe(mock);
+
+                t.complete();
+
+                jest.advanceTimersByTime(100);
+
+                expect(mock).toBeCalledTimes(0);
+            });
+        })
     });
 });

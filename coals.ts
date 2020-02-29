@@ -295,3 +295,11 @@ export function combine<T>(observables: readonly Observable<T>[]): Observable<T>
         });
     });
 }
+
+export function timeout(timeoutValue: number): Observable<number> {
+    return from(observer => {
+        const timer = setTimeout(() => observer.next(timeoutValue), timeoutValue);
+
+        return () => clearTimeout(timer);
+    });
+}
