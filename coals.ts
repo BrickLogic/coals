@@ -133,7 +133,7 @@ type Subscribe<T> = (
     complete?: AtomResetCallback
 ) => () => void;
 
-interface Observable<T> {
+export interface Observable<T> {
     readonly isCoal: true;
     readonly isObservable: true;
     readonly subscribe: Subscribe<T>;
@@ -200,7 +200,7 @@ export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observa
 type ValueGetter<T> = () => T;
 type SubjectNextCallback<T> = (nextValue?: T) => void;
 
-interface Subject<T> extends Observable<T | undefined> {
+export interface Subject<T> extends Observable<T | undefined> {
     readonly isSubject: true;
     readonly value: ValueGetter<T | undefined>;
     readonly next: SubjectNextCallback<T>;
@@ -301,5 +301,20 @@ export function timeout(timeoutValue: number): Observable<number> {
         const timer = setTimeout(() => observer.next(timeoutValue), timeoutValue);
 
         return () => clearTimeout(timer);
+    });
+}
+
+export function interval(intervalValue: number): Observable<number> {
+    return from(observer => {
+        const v = atom(1);
+
+        const timer = setInterval(() => {
+            const callIndex = v.value();
+            v.update(callIndex + 1);
+
+            observer.next(callIndex * intervalValue);
+        }, intervalValue);
+
+        return () => clearInterval(timer);
     });
 }

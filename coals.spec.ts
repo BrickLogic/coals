@@ -1,4 +1,4 @@
-import {combine, from, of, timeout} from "./coals";
+import { combine, from, interval, of, timeout } from "./coals";
 
 describe("Subject", () => {
     it("should have a value", () => {
@@ -64,115 +64,163 @@ describe("Subject", () => {
             expect(nc.value()).toBe(44);
         });
     });
+});
 
-    describe("Observable", () => {
-        it("should fire event from observable", () => {
-            return new Promise(done => {
-                const d = Date.now();
-                const c = from(o => o.next(d));
+describe("Observable", () => {
+    it("should fire event from observable", () => {
+        return new Promise(done => {
+            const d = Date.now();
+            const c = from(o => o.next(d));
 
-                c.subscribe(newValue => {
-                    expect(newValue).toBe(d);
-                    done();
-                });
+            c.subscribe(newValue => {
+                expect(newValue).toBe(d);
+                done();
             });
-        });
-
-        it("should fire complete when observable complete subscription", () => {
-            return new Promise(done => {
-                const c = from(o => o.complete());
-
-                c.subscribe(() => undefined, done);
-            });
-        });
-
-        it("should fire complete when coals complete", () => {
-            return new Promise(done => {
-                const c = from(() => undefined);
-
-                c.subscribe(() => undefined, done);
-
-                c.complete();
-            });
-        });
-
-        it("should forward events to subscribed coals", () => {
-            const c = from<number>(o => {
-                o.next(22);
-            });
-            const nc = of<number>();
-
-            c.subscribe(nc);
-
-            expect(nc.value()).toBe(22);
         });
     });
 
-    describe("operators", () => {
-        describe("combine", () => {
-            it("should combine", () => {
-                const a = of();
-                const b = of();
+    it("should fire complete when observable complete subscription", () => {
+        return new Promise(done => {
+            const c = from(o => o.complete());
 
-                const c = combine([a, b]);
+            c.subscribe(() => undefined, done);
+        });
+    });
 
-                const subscribeMock = jest.fn();
+    it("should fire complete when coals complete", () => {
+        return new Promise(done => {
+            const c = from(() => undefined);
 
-                c.subscribe(subscribeMock);
+            c.subscribe(() => undefined, done);
 
-                a.next(8);
-                b.next(99);
+            c.complete();
+        });
+    });
 
-                expect(subscribeMock).toBeCalledTimes(1);
-                expect(subscribeMock).toBeCalledWith([8, 99]);
-            });
+    it("should forward events to subscribed coals", () => {
+        const c = from<number>(o => {
+            o.next(22);
+        });
+        const nc = of<number>();
+
+        c.subscribe(nc);
+
+        expect(nc.value()).toBe(22);
+    });
+});
+
+describe("operators", () => {
+    describe("combine", () => {
+        it("should combine", () => {
+            const a = of();
+            const b = of();
+
+            const c = combine([a, b]);
+
+            const subscribeMock = jest.fn();
+
+            c.subscribe(subscribeMock);
+
+            a.next(8);
+            b.next(99);
+
+            expect(subscribeMock).toBeCalledTimes(1);
+            expect(subscribeMock).toBeCalledWith([8, 99]);
+        });
+    });
+
+    describe("timeout", () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
         });
 
-        describe("timeout", () => {
-            beforeEach(() => {
-                jest.useFakeTimers();
-            });
+        it("should fire event by timeout", () => {
+            const t = timeout(100);
 
-            it("should fire event by timeout", () => {
-                const t = timeout(100);
+            const mock = jest.fn();
 
-                const mock = jest.fn();
+            t.subscribe(mock);
 
-                t.subscribe(mock);
+            jest.advanceTimersByTime(100);
 
-                jest.advanceTimersByTime(100);
+            expect(mock).toBeCalledTimes(1);
+            expect(mock).toBeCalledWith(100);
+        });
 
-                expect(mock).toBeCalledTimes(1);
-                expect(mock).toBeCalledWith(100);
-            });
+        it("shouldn't fire event by timeout if unsubscribed", () => {
+            const t = timeout(100);
 
-            it("shouldn't fire event by timeout if unsubscribed", () => {
-                const t = timeout(100);
+            const mock = jest.fn();
 
-                const mock = jest.fn();
+            const unsub = t.subscribe(mock);
 
-                const unsub = t.subscribe(mock);
+            unsub();
 
-                unsub();
+            jest.advanceTimersByTime(100);
 
-                jest.advanceTimersByTime(100);
+            expect(mock).toBeCalledTimes(0);
+        });
 
-                expect(mock).toBeCalledTimes(0);
-            });
+        it("shouldn't fire event by timeout if completed", () => {
+            const t = timeout(100);
 
-            it("shouldn't fire event by timeout if completed", () => {
-                const t = timeout(100);
+            const mock = jest.fn();
 
-                const mock = jest.fn();
+            t.subscribe(mock);
 
-                t.subscribe(mock);
+            t.complete();
 
-                t.complete();
+            jest.advanceTimersByTime(100);
 
-                jest.advanceTimersByTime(100);
+            expect(mock).toBeCalledTimes(0);
+        });
+    });
 
-                expect(mock).toBeCalledTimes(0);
-            });
-        })
+    describe("interval", () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
+        });
+
+        it("should fire event by interval", () => {
+            const t = interval(100);
+
+            const mock = jest.fn();
+
+            t.subscribe(mock);
+
+            jest.advanceTimersByTime(200);
+
+            expect(mock).toBeCalledTimes(2);
+            expect(mock).toHaveBeenNthCalledWith(1, 100);
+            expect(mock).toHaveBeenNthCalledWith(2, 200);
+        });
+
+        it("shouldn't fire event by timeout if unsubscribed", () => {
+            const t = interval(100);
+
+            const mock = jest.fn();
+
+            const unsub = t.subscribe(mock);
+
+            unsub();
+
+            jest.advanceTimersByTime(200);
+
+            expect(mock).toBeCalledTimes(0);
+        });
+
+        it("shouldn't fire event by timeout if completed", () => {
+            const t = interval(100);
+
+            const mock = jest.fn();
+
+            t.subscribe(mock);
+
+            t.complete();
+
+            jest.advanceTimersByTime(100);
+
+            expect(mock).toBeCalledTimes(0);
+        });
     });
 });
