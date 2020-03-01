@@ -1,3 +1,4 @@
+
 type AtomResetCallback = () => void;
 type AtomChangeCallback<T> = (newState: T) => void;
 type AddWatch<T> = (watcher: AtomChangeCallback<T>, resetWatcher?: AtomResetCallback) => () => void;
@@ -339,16 +340,15 @@ export function merge<T1, T2, T3, T4, R>(
     o1: Observable<T1>,
     o2: Observable<T2>,
     o3: Observable<T3>,
-    o4: Observable<T4>,
+    o4: Observable<T4>
 ): Observable<T1 | T2 | T3 | T4>;
 export function merge<T1, T2, T3, T4, T5, R>(
     o1: Observable<T1>,
     o2: Observable<T2>,
     o3: Observable<T3>,
     o4: Observable<T4>,
-    o5: Observable<T5>,
+    o5: Observable<T5>
 ): Observable<T1 | T2 | T3 | T4 | T5>;
-
 
 export function merge<T>(...observables: readonly Observable<T>[]): Observable<T> {
     return from((innerObs: Observer<T>): void => {
@@ -358,4 +358,71 @@ export function merge<T>(...observables: readonly Observable<T>[]): Observable<T
             });
         });
     });
+}
+
+export function lift<T>(lifted: Observable<T>): Observable<T> {
+    return from(o => {
+        lifted.subscribe(o.next, o.complete);
+    });
+}
+
+export interface UnaryFunction<T, R> {
+    (source: T): R;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface OperatorFunction<T, R> extends UnaryFunction<Observable<T>, Observable<R>> {}
+
+/**
+ *
+ * const serverPipe = pipe(
+ *  switchMap(() => of(123)),
+ *  share(),
+ *  map((ev) => ev * 22),
+ *  tap((ev) => console.log("debug", ev))
+ * );
+ *
+ * serverPipe(of(88));
+ */
+
+/**
+ * operator could return
+ *  - value
+ *  - void
+ *  - promise
+ *  - another observable
+ *
+ *  operator could complete source
+ *  operator could return source
+ *  operator could pass new value
+ */
+
+export function pipe<T1, R>(op1: UnaryFunction<T1, R>): UnaryFunction<T1, R>;
+export function pipe<T1, T2, R>(op1: UnaryFunction<T1, T2>, op2: UnaryFunction<T2, R>): UnaryFunction<T1, R>;
+export function pipe<T1, T2, T3, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, T3>,
+    op3: UnaryFunction<T3, R>
+): UnaryFunction<T1, R>;
+export function pipe<T1, T2, T3, T4, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, T3>,
+    op3: UnaryFunction<T3, T4>,
+    op4: UnaryFunction<T4, R>
+): UnaryFunction<T1, R>;
+export function pipe<T1, T2, T3, T4, T5, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, T3>,
+    op3: UnaryFunction<T3, T4>,
+    op4: UnaryFunction<T4, T5>,
+    op5: UnaryFunction<T5, R>
+): UnaryFunction<T1, R>;
+
+export function pipe<T, R>(...fns: readonly UnaryFunction<T, R>[]): UnaryFunction<T, R> {
+    return (input: T) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return fns.reduce((source: any, fn) => {
+            return fn(source);
+        }, input);
+    };
 }

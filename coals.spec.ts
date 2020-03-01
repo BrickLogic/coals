@@ -1,4 +1,4 @@
-import { combine, from, interval, of, timeout } from "./coals";
+import { combine, from, interval, of, pipe, timeout } from "./coals";
 
 describe("Subject", () => {
     it("should have a value", () => {
@@ -106,6 +106,17 @@ describe("Observable", () => {
         c.subscribe(nc);
 
         expect(nc.value()).toBe(22);
+    });
+});
+
+describe("pipe", () => {
+    it("should pipe two functions together", () => {
+        const a = (x: number): number => x + x;
+        const b = (x: number): number => x - 1;
+
+        const c = pipe(a, b);
+        expect(c(1)).toBe(1);
+        expect(c(10)).toBe(19);
     });
 });
 
