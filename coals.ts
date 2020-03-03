@@ -1,4 +1,3 @@
-
 type AtomResetCallback = () => void;
 type AtomChangeCallback<T> = (newState: T) => void;
 type AddWatch<T> = (watcher: AtomChangeCallback<T>, resetWatcher?: AtomResetCallback) => () => void;
@@ -373,32 +372,11 @@ export interface UnaryFunction<T, R> {
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface OperatorFunction<T, R> extends UnaryFunction<Observable<T>, Observable<R>> {}
 
-/**
- *
- * const serverPipe = pipe(
- *  switchMap(() => of(123)),
- *  share(),
- *  map((ev) => ev * 22),
- *  tap((ev) => console.log("debug", ev))
- * );
- *
- * serverPipe(of(88));
- */
-
-/**
- * operator could return
- *  - value
- *  - void
- *  - promise
- *  - another observable
- *
- *  operator could complete source
- *  operator could return source
- *  operator could pass new value
- */
-
 export function pipe<T1, R>(op1: UnaryFunction<T1, R>): UnaryFunction<T1, R>;
-export function pipe<T1, T2, R>(op1: UnaryFunction<T1, T2>, op2: UnaryFunction<T2, R>): UnaryFunction<T1, R>;
+export function pipe<T1, T2, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, R>
+): UnaryFunction<T1, R>;
 export function pipe<T1, T2, T3, R>(
     op1: UnaryFunction<T1, T2>,
     op2: UnaryFunction<T2, T3>,

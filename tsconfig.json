@@ -28,15 +28,13 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    "declaration": true
   },
 
   "include": [
-    "*.ts",
-
-    "src/*.ts",
-    "*.json",
-    "src/**/*.ts"
+    "coals.ts",
+    "operators.ts"
   ],
 
   "exclude": ["node_modules"]
