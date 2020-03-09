@@ -31,6 +31,43 @@ describe("Subject", () => {
         expect(c.value()).toBe(321);
     });
 
+    it("should call error callback when subject fire error", () => {
+        const c = of();
+
+        const mock = jest.fn();
+
+        c.subscribe(
+            () => undefined,
+            () => undefined,
+            mock
+        );
+
+        c.error(new Error("err"));
+
+        expect(mock).toHaveBeenCalledTimes(1);
+        expect(mock).toHaveBeenCalledWith(new Error("err"));
+    });
+
+    it("should pass error to subscribers", () => {
+        const c = from<number>(o => {
+            o.error(new Error("some error"));
+        });
+
+        const nc = of<number>();
+        const f = jest.fn();
+
+        nc.subscribe(
+            (): void => undefined,
+            (): void => undefined,
+            f
+        );
+
+        c.subscribe(nc);
+
+        expect(f).toHaveBeenCalledTimes(1);
+        expect(f).toHaveBeenLastCalledWith(new Error("some error"));
+    });
+
     describe("Optional", () => {
         it("should have optional value", () => {
             const c = of();
@@ -106,6 +143,23 @@ describe("Observable", () => {
         c.subscribe(nc);
 
         expect(nc.value()).toBe(22);
+    });
+
+    it("should handle error of observable", () => {
+        const c = from<number>(o => {
+            o.error(new Error("some error"));
+        });
+
+        const f = jest.fn();
+
+        c.subscribe(
+            (): void => undefined,
+            (): void => undefined,
+            f
+        );
+
+        expect(f).toHaveBeenCalledTimes(1);
+        expect(f).toHaveBeenLastCalledWith(new Error("some error"));
     });
 });
 

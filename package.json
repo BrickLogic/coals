@@ -1,13 +1,15 @@
 {
-  "name": "coals",
+  "name": "@bricklogic/coals",
   "version": "1.0.0",
   "description": "Coals is a small stream library updapted for microcoontrollers usage",
   "main": "dist/coals.js",
   "types": "./lib/coals.ts",
-  "repository": "https://github.com/Rastopyr/coals.git",
+  "repository": "https://github.com/bricklogic/coals.git",
   "author": "Rastopyr <rastopyr@gmail.com>",
   "license": "MIT",
-  "publishConfig": { "registry": "https://npm.pkg.github.com/" },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
   "files": [
     "dist"
   ],
@@ -37,5 +39,8 @@
     "build": "yarn clean && tsc --outDir dist",
     "test": "jest",
     "lint": "eslint --ext .ts ."
+  },
+  "dependencies": {
+    "lowsync": "^1.4.7"
   }
 }

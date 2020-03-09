@@ -22,10 +22,6 @@ type Atom<T> = {
     readonly reset: Reset;
 };
 
-function get<T>(a: Atom<T>): T {
-    return a.value();
-}
-
 function atom<T>(value: T): Atom<T> {
     // eslint-disable-next-line prefer-const
     let v = value;
@@ -71,12 +67,16 @@ function atom<T>(value: T): Atom<T> {
 
 type Noop = () => void;
 
+const noop: Noop = () => undefined;
+
 type Teardown = undefined | void | Noop;
 type NextCallback<T> = (nextValue: T) => void;
+type ErrorCallback = <T extends Error>(e: T) => void;
 
 interface Observer<T> {
     readonly next: NextCallback<T>;
     readonly complete: Noop;
+    readonly error: ErrorCallback;
 }
 
 interface Subscription<T> {
@@ -85,17 +85,27 @@ interface Subscription<T> {
     readonly unsubscribe: Noop;
 }
 
-const createObserver = <T>(onNext: NextCallback<T>, onComplete: Noop): Observer<T> => {
+const createObserver = <T>(
+    onNext: NextCallback<T>,
+    onComplete: Noop,
+    onError: ErrorCallback
+): Observer<T> => {
     const next: NextCallback<T> = ev => onNext(ev);
     const complete: Noop = () => onComplete();
+    const error: ErrorCallback = e => onError(e);
 
     return {
         next,
-        complete
+        complete,
+        error
     };
 };
 
-const createSubscription = <T>(onNext: NextCallback<T>, onComplete: Noop): Subscription<T> => {
+const createSubscription = <T>(
+    onNext: NextCallback<T>,
+    onComplete: Noop,
+    onError: ErrorCallback
+): Subscription<T> => {
     let teardown: Teardown;
     const isSubscribed = atom(true);
 
@@ -105,7 +115,7 @@ const createSubscription = <T>(onNext: NextCallback<T>, onComplete: Noop): Subsc
         }
     };
 
-    const observer = createObserver(internalOnNext, onComplete);
+    const observer = createObserver(internalOnNext, onComplete, onError);
     const unsubscribe = (): void => {
         isSubscribed.update(false);
 
@@ -130,23 +140,51 @@ type CoalProducerObservable<T> = (o: Observer<T>) => Teardown;
 type SubscriptionCallback<T> = (nextValue: T) => void;
 type Subscribe<T> = (
     callback: SubscriptionCallback<T> | Subject<T>,
-    complete?: AtomResetCallback
+    complete?: AtomResetCallback,
+    error?: ErrorCallback
 ) => () => void;
 
 export interface Observable<T> {
     readonly isCoal: true;
     readonly isObservable: true;
     readonly subscribe: Subscribe<T>;
-    readonly complete: () => void;
+    readonly complete: Noop;
 }
 
-export type From = <T>(eventProducer: CoalProducerObservable<T>) => Observable<T>;
+type ExtendedObservable<T> = Observable<T> & {
+    readonly isCompleted: Atom<boolean>;
+    readonly subscriptions: Atom<readonly Subscription<T>[]>;
+};
 
-export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observable<T> => {
+type CreateExtendedObservable = <T>(
+    eventProducer: CoalProducerObservable<T>
+) => ExtendedObservable<T>;
+
+const createExtendedObservable: CreateExtendedObservable = <T>(
+    eventProducer: CoalProducerObservable<T>
+): ExtendedObservable<T> => {
     const isCompleted = atom(false);
-    const subscriptions = atom<readonly Noop[]>([]);
+    // TODO: store observers instread subscriptions
+    const subscriptions = atom<readonly Subscription<T>[]>([]);
 
-    const subscribe: Subscribe<T> = (callbackOrCoal, complete) => {
+    const subscribe: Subscribe<T> = (callbackOrCoal, complete, error) => {
+        const onComplete = (): void => {
+            if (complete) {
+                complete();
+            }
+        };
+
+        const onError: ErrorCallback = (e): void => {
+            if (typeof callbackOrCoal === "object") {
+                callbackOrCoal.error(e);
+                return;
+            }
+
+            if (error) {
+                error(e);
+            }
+        };
+
         const onNext = (ev: T): void => {
             if (isCompleted.value()) {
                 return;
@@ -157,16 +195,14 @@ export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observa
                 return;
             }
 
-            callbackOrCoal(ev);
-        };
-
-        const onComplete = (): void => {
-            if (complete) {
-                complete();
+            try {
+                callbackOrCoal(ev);
+            } catch (e) {
+                onError(e);
             }
         };
 
-        const sub = createSubscription(onNext, onComplete);
+        const sub = createSubscription(onNext, onComplete, onError);
 
         const teardown = eventProducer(sub.observer);
 
@@ -177,15 +213,16 @@ export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observa
             sub.unsubscribe();
         };
 
-        subscriptions.update([...subscriptions.value(), unsubscribe]);
+        subscriptions.update([...subscriptions.value(), sub]);
 
         return unsubscribe;
     };
 
     const complete = (): void => {
         isCompleted.update(true);
-        subscriptions.value().forEach(unsubscribe => {
-            unsubscribe();
+        subscriptions.value().forEach(sub => {
+            sub.unsubscribe();
+            sub.observer.complete();
         });
     };
 
@@ -193,8 +230,18 @@ export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observa
         isCoal: true,
         isObservable: true,
         complete,
-        subscribe
+        subscribe,
+        subscriptions,
+        isCompleted
     };
+};
+
+export type From = <T>(eventProducer: CoalProducerObservable<T>) => Observable<T>;
+
+export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observable<T> => {
+    const { subscriptions: _, ...observable } = createExtendedObservable(eventProducer);
+
+    return observable;
 };
 
 type ValueGetter<T> = () => T;
@@ -204,6 +251,7 @@ export interface Subject<T> extends Observable<T | undefined> {
     readonly isSubject: true;
     readonly value: ValueGetter<T | undefined>;
     readonly next: SubjectNextCallback<T>;
+    readonly error: ErrorCallback;
 }
 
 type Of = <T>(initValue?: T) => Subject<T>;
@@ -214,46 +262,50 @@ interface Observer<T> {
 }
 
 export const of: Of = <T>(initValue?: T): Subject<T> => {
-    const a = atom(initValue);
-    const isCompleted = atom(false);
-
-    const value: ValueGetter<T | undefined> = () => {
-        return a.valueOf();
-    };
+    const subjectValue = atom(initValue);
+    const { subscriptions, subscribe, ...observable } = createExtendedObservable<T | undefined>(
+        noop
+    );
 
     const next: NextCallback<T | undefined> = nextValue => {
-        if (get(isCompleted)) {
+        if (observable.isCompleted.value()) {
             return;
         }
 
-        a.update(nextValue);
+        subjectValue.update(nextValue);
+
+        subscriptions.value().forEach(sub => {
+            sub.observer.next(nextValue);
+        });
     };
 
-    const subscribe: Subscribe<T | undefined> = (callbackOrCoal, complete) => {
+    const error: ErrorCallback = e => {
+        observable.isCompleted.update(true);
+        subscriptions.value().forEach(sub => {
+            sub.observer.error(e);
+            sub.unsubscribe();
+        });
+    };
+
+    const innerSubscribe = (
+        callbackOrCoal: SubscriptionCallback<T | undefined> | Subject<T | undefined>,
+        complete?: Noop,
+        errorCallback?: ErrorCallback
+    ): Noop => {
         if (typeof callbackOrCoal === "object") {
-            const subscription = a.addWatch(callbackOrCoal.next, complete);
-
-            callbackOrCoal.next(value());
-
-            return subscription;
+            callbackOrCoal.next(subjectValue.value());
         }
 
-        return a.addWatch(callbackOrCoal, complete);
-    };
-
-    const complete = (): void => {
-        isCompleted.update(true);
-        a.reset();
+        return subscribe(callbackOrCoal, complete, errorCallback);
     };
 
     return {
-        isCoal: true,
-        isObservable: true,
-        isSubject: true,
-        value,
+        ...observable,
+        value: () => subjectValue.value(),
+        subscribe: innerSubscribe,
+        error,
         next,
-        subscribe,
-        complete
+        isSubject: true
     };
 };
 
