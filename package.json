@@ -1,6 +1,6 @@
 {
   "name": "@bricklogic/coals",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Coals is a small stream library updapted for microcoontrollers usage",
   "main": "dist/coals.js",
   "types": "dist/coals.d.ts",
