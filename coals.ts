@@ -149,10 +149,10 @@ export interface Observable<T> {
     readonly isObservable: true;
     readonly subscribe: Subscribe<T>;
     readonly complete: Noop;
+    readonly isCompleted: Atom<boolean>;
 }
 
 type ExtendedObservable<T> = Observable<T> & {
-    readonly isCompleted: Atom<boolean>;
     readonly subscriptions: Atom<readonly Subscription<T>[]>;
 };
 
@@ -238,41 +238,40 @@ const createExtendedObservable: CreateExtendedObservable = <T>(
 
 export type From = <T>(eventProducer: CoalProducerObservable<T>) => Observable<T>;
 
-export const from: From = <T>(eventProducer: CoalProducerObservable<T>): Observable<T> => {
+export const create: From = <T>(eventProducer: CoalProducerObservable<T>): Observable<T> => {
     const { subscriptions: _, ...observable } = createExtendedObservable(eventProducer);
 
     return observable;
 };
 
 type ValueGetter<T> = () => T;
-type SubjectNextCallback<T> = (nextValue?: T) => void;
+type SubjectNextCallback<T> = (nextValue: T) => void;
 
-export interface Subject<T> extends Observable<T | undefined> {
+export interface Subject<T> extends Observable<T> {
     readonly isSubject: true;
-    readonly value: ValueGetter<T | undefined>;
     readonly next: SubjectNextCallback<T>;
     readonly error: ErrorCallback;
 }
 
-type Of = <T>(initValue?: T) => Subject<T>;
+export interface BehaviorSubject<T> extends Subject<T> {
+    readonly value: ValueGetter<T>;
+}
+
+type Constant = <T>(initValue: T) => BehaviorSubject<T>;
+type Events = <T>() => Subject<T>;
 
 interface Observer<T> {
     readonly next: NextCallback<T>;
     readonly complete: () => void;
 }
 
-export const of: Of = <T>(initValue?: T): Subject<T> => {
-    const subjectValue = atom(initValue);
-    const { subscriptions, subscribe, ...observable } = createExtendedObservable<T | undefined>(
-        noop
-    );
+export const events: Events = <T>(): Subject<T> => {
+    const { subscriptions, subscribe, ...observable } = createExtendedObservable<T>(noop);
 
-    const next: NextCallback<T | undefined> = nextValue => {
+    const next: NextCallback<T> = nextValue => {
         if (observable.isCompleted.value()) {
             return;
         }
-
-        subjectValue.update(nextValue);
 
         subscriptions.value().forEach(sub => {
             sub.observer.next(nextValue);
@@ -288,7 +287,48 @@ export const of: Of = <T>(initValue?: T): Subject<T> => {
     };
 
     const innerSubscribe = (
-        callbackOrCoal: SubscriptionCallback<T | undefined> | Subject<T | undefined>,
+        callbackOrCoal: SubscriptionCallback<T> | Subject<T>,
+        complete?: Noop,
+        errorCallback?: ErrorCallback
+    ): Noop => {
+        return subscribe(
+            ev => {
+                if (typeof callbackOrCoal === "object") {
+                    callbackOrCoal.next(ev);
+                    return;
+                }
+
+                callbackOrCoal(ev);
+            },
+            complete,
+            errorCallback
+        );
+    };
+
+    return {
+        ...observable,
+        subscribe: innerSubscribe,
+        error,
+        next,
+        isSubject: true
+    };
+};
+
+export const constant: Constant = <T>(initValue: T): BehaviorSubject<T> => {
+    const subjectValue = atom(initValue);
+    const { next, subscribe, ...eventsInstance } = events<T>();
+
+    const innerNext: NextCallback<T> = nextValue => {
+        if (eventsInstance.isCompleted.value()) {
+            return;
+        }
+
+        subjectValue.update(nextValue);
+        next(nextValue);
+    };
+
+    const innerSubscribe = (
+        callbackOrCoal: SubscriptionCallback<T> | Subject<T>,
         complete?: Noop,
         errorCallback?: ErrorCallback
     ): Noop => {
@@ -300,11 +340,10 @@ export const of: Of = <T>(initValue?: T): Subject<T> => {
     };
 
     return {
-        ...observable,
+        ...eventsInstance,
         value: () => subjectValue.value(),
         subscribe: innerSubscribe,
-        error,
-        next,
+        next: innerNext,
         isSubject: true
     };
 };
@@ -336,7 +375,7 @@ export function combine<T1, T2, T3, T4, T5, R>(
 ): Observable<[T1, T2, T3, T4, T5]>;
 
 export function combine<T>(observables: readonly Observable<T>[]): Observable<T> {
-    return from((innerObs: Observer<T>): void => {
+    return create((innerObs: Observer<T>): void => {
         const values = atom<readonly (T | None)[]>(observables.map(() => NONE_VALUE));
 
         observables.forEach((obs, i) => {
@@ -358,7 +397,7 @@ export function combine<T>(observables: readonly Observable<T>[]): Observable<T>
 }
 
 export function timeout(timeoutValue: number): Observable<number> {
-    return from(observer => {
+    return create(observer => {
         const timer = setTimeout(() => observer.next(timeoutValue), timeoutValue);
 
         return () => clearTimeout(timer);
@@ -366,7 +405,7 @@ export function timeout(timeoutValue: number): Observable<number> {
 }
 
 export function interval(intervalValue: number): Observable<number> {
-    return from(observer => {
+    return create(observer => {
         const v = atom(1);
 
         const timer = setInterval(() => {
@@ -402,7 +441,7 @@ export function merge<T1, T2, T3, T4, T5, R>(
 ): Observable<T1 | T2 | T3 | T4 | T5>;
 
 export function merge<T>(...observables: readonly Observable<T>[]): Observable<T> {
-    return from((innerObs: Observer<T>): void => {
+    return create((innerObs: Observer<T>): void => {
         observables.forEach(obs => {
             obs.subscribe((nextEv: T) => {
                 innerObs.next(nextEv);
@@ -412,7 +451,7 @@ export function merge<T>(...observables: readonly Observable<T>[]): Observable<T
 }
 
 export function lift<T>(lifted: Observable<T>): Observable<T> {
-    return from(o => {
+    return create(o => {
         lifted.subscribe(o.next, o.complete);
     });
 }

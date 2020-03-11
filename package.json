@@ -1,9 +1,9 @@
 {
   "name": "@bricklogic/coals",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Coals is a small stream library updapted for microcoontrollers usage",
   "main": "dist/coals.js",
-  "types": "./lib/coals.ts",
+  "types": "dist/coals.d.ts",
   "repository": "https://github.com/bricklogic/coals.git",
   "author": "Rastopyr <rastopyr@gmail.com>",
   "license": "MIT",
