@@ -39,8 +39,5 @@
     "build": "yarn clean && tsc --outDir dist",
     "test": "jest",
     "lint": "eslint --ext .ts ."
-  },
-  "dependencies": {
-    "lowsync": "^1.4.7"
   }
 }
