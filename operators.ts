@@ -1,31 +1,24 @@
-//
-// // pipe(
-// //     map(),
-// //     takeUntil(),
-// //     combineLatest()
-// // )(obs)
-//
-// import {Observable, Subscriber} from "./coals";
-//
-// export interface UnaryFunction<T, R> { (source: T): R; }
-//
-// // eslint-disable-next-line @typescript-eslint/no-empty-interface
-// export interface OperatorFunction<T, R> extends UnaryFunction<Observable<T>, Observable<R>> {}
-//
-// export function lift<T>(source: Observable<T>): Observable<T> {
-//     const o = new Observable();
-//     o.source = source;
-//     return o;
-// }
-//
-// export const applyOperator = <T, R>(source: Observable<T>, operator: OperatorFunction<T, R>) => {
-//     const s = lift(source);
-//
-//
-// }
-//
-// export const pipe = <T, R>(...operators: OperatorFunction<T, R>[], source: Observable<T>) => {
-//     return operators.reduce((source, operator) => {
-//
-//     }, source)
-// };
+import { create, lift, Observable, OperatorFunction } from "./coals";
+
+export function map<T, R>(mapFn: (input: T) => R): OperatorFunction<T, R> {
+    return (source: Observable<T>) =>
+        create(o => {
+            return lift(source).subscribe(ev => o.next(mapFn(ev)), o.complete, o.error);
+        });
+}
+
+export function filter<T>(filterFn: (input: T) => boolean): OperatorFunction<T, T> {
+    return (source: Observable<T>): Observable<T> => {
+        return create(o => {
+            return lift(source).subscribe(
+                ev => {
+                    if (filterFn(ev)) {
+                        o.next(ev);
+                    }
+                },
+                o.complete,
+                o.error
+            );
+        });
+    };
+}

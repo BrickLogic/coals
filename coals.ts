@@ -144,17 +144,61 @@ type Subscribe<T> = (
     error?: ErrorCallback
 ) => () => void;
 
-export interface Observable<T> {
+export interface UnaryFunction<T, R> {
+    (source: T): R;
+}
+
+export function pipe<T>(): UnaryFunction<T, T>;
+export function pipe<T1, R>(op1: UnaryFunction<T1, R>): UnaryFunction<T1, R>;
+export function pipe<T1, T2, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, R>
+): UnaryFunction<T1, R>;
+export function pipe<T1, T2, T3, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, T3>,
+    op3: UnaryFunction<T3, R>
+): UnaryFunction<T1, R>;
+export function pipe<T1, T2, T3, T4, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, T3>,
+    op3: UnaryFunction<T3, T4>,
+    op4: UnaryFunction<T4, R>
+): UnaryFunction<T1, R>;
+export function pipe<T1, T2, T3, T4, T5, R>(
+    op1: UnaryFunction<T1, T2>,
+    op2: UnaryFunction<T2, T3>,
+    op3: UnaryFunction<T3, T4>,
+    op4: UnaryFunction<T4, T5>,
+    op5: UnaryFunction<T5, R>
+): UnaryFunction<T1, R>;
+
+export function pipe<T, R>(...fns: readonly UnaryFunction<T, R>[]): UnaryFunction<T, R> {
+    return (input: T) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return fns.reduce((source: any, fn) => {
+            return fn(source);
+        }, input);
+    };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface OperatorFunction<T, R> extends UnaryFunction<Observable<T>, Observable<R>> {}
+
+interface ExtendedObservable<T> {
     readonly isCoal: true;
     readonly isObservable: true;
     readonly subscribe: Subscribe<T>;
     readonly complete: Noop;
     readonly isCompleted: Atom<boolean>;
+    readonly subscriptions: Atom<readonly Subscription<T>[]>;
+
+    pipe(): Observable<T>;
+    pipe<R>(op1: OperatorFunction<T, R>): Observable<R>;
+    pipe<T1, R>(op1: OperatorFunction<T, T1>, op2: OperatorFunction<T1, R>): Observable<R>;
 }
 
-type ExtendedObservable<T> = Observable<T> & {
-    readonly subscriptions: Atom<readonly Subscription<T>[]>;
-};
+export type Observable<T> = Omit<ExtendedObservable<T>, "subscriptions">;
 
 type CreateExtendedObservable = <T>(
     eventProducer: CoalProducerObservable<T>
@@ -232,7 +276,17 @@ const createExtendedObservable: CreateExtendedObservable = <T>(
         complete,
         subscribe,
         subscriptions,
-        isCompleted
+        isCompleted,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pipe(...operators: readonly OperatorFunction<any, any>[]) {
+            if (operators.length === 0) {
+                return this;
+            }
+
+            // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+            // @ts-ignore
+            return pipe(...operators)(this);
+        }
     };
 };
 
@@ -454,44 +508,4 @@ export function lift<T>(lifted: Observable<T>): Observable<T> {
     return create(o => {
         lifted.subscribe(o.next, o.complete);
     });
-}
-
-export interface UnaryFunction<T, R> {
-    (source: T): R;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface OperatorFunction<T, R> extends UnaryFunction<Observable<T>, Observable<R>> {}
-
-export function pipe<T1, R>(op1: UnaryFunction<T1, R>): UnaryFunction<T1, R>;
-export function pipe<T1, T2, R>(
-    op1: UnaryFunction<T1, T2>,
-    op2: UnaryFunction<T2, R>
-): UnaryFunction<T1, R>;
-export function pipe<T1, T2, T3, R>(
-    op1: UnaryFunction<T1, T2>,
-    op2: UnaryFunction<T2, T3>,
-    op3: UnaryFunction<T3, R>
-): UnaryFunction<T1, R>;
-export function pipe<T1, T2, T3, T4, R>(
-    op1: UnaryFunction<T1, T2>,
-    op2: UnaryFunction<T2, T3>,
-    op3: UnaryFunction<T3, T4>,
-    op4: UnaryFunction<T4, R>
-): UnaryFunction<T1, R>;
-export function pipe<T1, T2, T3, T4, T5, R>(
-    op1: UnaryFunction<T1, T2>,
-    op2: UnaryFunction<T2, T3>,
-    op3: UnaryFunction<T3, T4>,
-    op4: UnaryFunction<T4, T5>,
-    op5: UnaryFunction<T5, R>
-): UnaryFunction<T1, R>;
-
-export function pipe<T, R>(...fns: readonly UnaryFunction<T, R>[]): UnaryFunction<T, R> {
-    return (input: T) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return fns.reduce((source: any, fn) => {
-            return fn(source);
-        }, input);
-    };
 }
