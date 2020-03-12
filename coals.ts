@@ -67,7 +67,7 @@ function atom<T>(value: T): Atom<T> {
 
 type Noop = () => void;
 
-const noop: Noop = () => undefined;
+export const noop: Noop = () => undefined;
 
 type Teardown = undefined | void | Noop;
 type NextCallback<T> = (nextValue: T) => void;
@@ -208,7 +208,6 @@ const createExtendedObservable: CreateExtendedObservable = <T>(
     eventProducer: CoalProducerObservable<T>
 ): ExtendedObservable<T> => {
     const isCompleted = atom(false);
-    // TODO: store observers instread subscriptions
     const subscriptions = atom<readonly Subscription<T>[]>([]);
 
     const subscribe: Subscribe<T> = (callbackOrCoal, complete, error) => {
@@ -248,9 +247,13 @@ const createExtendedObservable: CreateExtendedObservable = <T>(
 
         const sub = createSubscription(onNext, onComplete, onError);
 
-        const teardown = eventProducer(sub.observer);
+        try {
+            const teardown = eventProducer(sub.observer);
 
-        sub.teardown(teardown);
+            sub.teardown(teardown);
+        } catch (e) {
+            onError(e);
+        }
 
         const unsubscribe = (): void => {
             onComplete();
@@ -506,6 +509,6 @@ export function merge<T>(...observables: readonly Observable<T>[]): Observable<T
 
 export function lift<T>(lifted: Observable<T>): Observable<T> {
     return create(o => {
-        lifted.subscribe(o.next, o.complete);
+        lifted.subscribe(o.next, o.complete, o.error);
     });
 }
